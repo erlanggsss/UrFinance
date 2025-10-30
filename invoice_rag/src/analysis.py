@@ -85,14 +85,14 @@ def analyze_invoices(weeks_back: int | None = None):
         for row in cursor.fetchall():
             top_vendors.append({
                 'name': row[0],
-                'total': row[1],
+                'total': float(row[1]) if row[1] is not None else 0.0,
                 'transaction_count': row[2]
             })
         
         return {
             'total_invoices': total_invoices or 0,
-            'total_spent': total_spent or 0.0,
-            'average_amount': average_amount or 0.0,
+            'total_spent': float(total_spent) if total_spent is not None else 0.0,
+            'average_amount': float(average_amount) if average_amount is not None else 0.0,
             'top_vendors': top_vendors
         }
     
@@ -146,7 +146,7 @@ def get_weekly_data(weeks_back=4):
                 'id': row[0],
                 'shop_name': row[1],
                 'invoice_date': row[2],
-                'total_amount': row[3],
+                'total_amount': float(row[3]) if row[3] is not None else 0.0,
                 'transaction_type': row[4],
                 'processed_at': datetime.fromisoformat(row[5]) if row[5] else None,
                 'image_path': row[6]

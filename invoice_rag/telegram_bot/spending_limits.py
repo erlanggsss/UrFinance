@@ -1,6 +1,7 @@
 import sqlite3
 import os
 from typing import Optional, Dict, Any
+from decimal import Decimal
 from src.analysis import analyze_invoices
 
 def get_db_path():
@@ -98,7 +99,10 @@ def get_monthly_limit(user_id: int) -> Optional[float]:
         placeholder = get_placeholder()
         cursor.execute(f'SELECT monthly_limit FROM spending_limits WHERE user_id = {placeholder}', (user_id,))
         result = cursor.fetchone()
-        return result[0] if result else None
+        if result:
+            # Convert Decimal to float for Supabase compatibility
+            return float(result[0]) if result[0] is not None else None
+        return None
     finally:
         conn.close()
 
@@ -119,7 +123,13 @@ def check_spending_limit(user_id: int, new_amount: float = 0) -> Dict[str, Any]:
             'message': 'No spending limit set. Use /set_limit to set one.'
         }
 
+    # Convert all values to float to avoid Decimal/float arithmetic issues
+    monthly_limit = float(monthly_limit)
+    new_amount = float(new_amount) if new_amount else 0.0
+    
     current_spending = get_current_month_spending(user_id)
+    current_spending = float(current_spending)
+    
     # For new invoices being processed, add the new amount
     # For checking current status, new_amount will be 0
     total_with_new = current_spending + new_amount if new_amount > 0 else current_spending
