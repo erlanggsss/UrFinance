@@ -439,65 +439,112 @@ Return ONLY the JSON, no explanations."""
 
 
 def create_tables():
-    """Create database tables if they don't exist."""
-    # Import the centralized database path function
-    from .database import get_default_db_path
-
-    db_path = get_default_db_path()
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-
-    # Create simplified invoices table
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS invoices (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            shop_name TEXT NOT NULL,
-            invoice_date TEXT,
-            total_amount REAL NOT NULL,
-            transaction_type TEXT,
-            processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            image_path TEXT
-        )
-    """
-    )
-
-    # Create invoice_items table (unchanged)
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS invoice_items (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            invoice_id INTEGER,
-            item_name TEXT,
-            quantity INTEGER,
-            unit_price REAL,
-            total_price REAL,
-            FOREIGN KEY (invoice_id) REFERENCES invoices (id)
-        )
-    """
-    )
-
-    conn.commit()
-    conn.close()
-
-
-def save_to_database_robust(invoice_data, image_path):
-    """Save invoice data to database with robust error handling."""
+    """Create database tables if they don't exist - supports both SQLite and Supabase."""
     try:
-        create_tables()
-        # Import the centralized database path function
+        from src.db_config import get_raw_connection, USE_SUPABASE
+        
+        # For Supabase, tables should already exist (created via migration)
+        if USE_SUPABASE:
+            print("ℹ️  Using Supabase - tables managed via migration")
+            return
+        
+        # For SQLite, create tables if needed
         from .database import get_default_db_path
-
         db_path = get_default_db_path()
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
 
-        # Insert simplified invoice
+        # Create simplified invoices table
         cursor.execute(
             """
+            CREATE TABLE IF NOT EXISTS invoices (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                shop_name TEXT NOT NULL,
+                invoice_date TEXT,
+                total_amount REAL NOT NULL,
+                transaction_type TEXT,
+                processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                image_path TEXT
+            )
+        """
+        )
+
+        # Create invoice_items table (unchanged)
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS invoice_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                invoice_id INTEGER,
+                item_name TEXT,
+                quantity INTEGER,
+                unit_price REAL,
+                total_price REAL,
+                FOREIGN KEY (invoice_id) REFERENCES invoices (id)
+            )
+        """
+        )
+
+        conn.commit()
+        conn.close()
+    except ImportError:
+        # Fallback to SQLite if db_config not available
+        from .database import get_default_db_path
+        db_path = get_default_db_path()
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS invoices (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                shop_name TEXT NOT NULL,
+                invoice_date TEXT,
+                total_amount REAL NOT NULL,
+                transaction_type TEXT,
+                processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                image_path TEXT
+            )
+        """
+        )
+        
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS invoice_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                invoice_id INTEGER,
+                item_name TEXT,
+                quantity INTEGER,
+                unit_price REAL,
+                total_price REAL,
+                FOREIGN KEY (invoice_id) REFERENCES invoices (id)
+            )
+        """
+        )
+        
+        conn.commit()
+        conn.close()
+
+
+def save_to_database_robust(invoice_data, image_path):
+    """Save invoice data to database with robust error handling - supports both SQLite and Supabase."""
+    try:
+        create_tables()
+        
+        # Use centralized database connection
+        from src.db_config import get_raw_connection, USE_SUPABASE
+        
+        conn = get_raw_connection()
+        cursor = conn.cursor()
+        
+        # Determine placeholder based on database type
+        placeholder = "%s" if USE_SUPABASE else "?"
+
+        # Insert simplified invoice
+        cursor.execute(
+            f"""
             INSERT INTO invoices (
                 shop_name, invoice_date, total_amount, transaction_type, image_path
-            ) VALUES (?, ?, ?, ?, ?)
+            ) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})
         """,
             (
                 invoice_data.get("shop_name"),
@@ -508,15 +555,20 @@ def save_to_database_robust(invoice_data, image_path):
             ),
         )
 
-        invoice_id = cursor.lastrowid
+        # Get the last inserted ID
+        if USE_SUPABASE:
+            cursor.execute("SELECT lastval()")
+            invoice_id = cursor.fetchone()[0]
+        else:
+            invoice_id = cursor.lastrowid
 
         # Insert items
         items = invoice_data.get("items", [])
         for item in items:
             cursor.execute(
-                """
+                f"""
                 INSERT INTO invoice_items (invoice_id, item_name, quantity, unit_price, total_price)
-                VALUES (?, ?, ?, ?, ?)
+                VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})
             """,
                 (
                     invoice_id,
@@ -529,10 +581,61 @@ def save_to_database_robust(invoice_data, image_path):
 
         conn.commit()
         conn.close()
+        
+        print(f"✅ Invoice saved to database with ID: {invoice_id}")
         return invoice_id
 
+    except ImportError:
+        # Fallback to SQLite if db_config not available
+        try:
+            from .database import get_default_db_path
+            db_path = get_default_db_path()
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+
+            cursor.execute(
+                """
+                INSERT INTO invoices (
+                    shop_name, invoice_date, total_amount, transaction_type, image_path
+                ) VALUES (?, ?, ?, ?, ?)
+            """,
+                (
+                    invoice_data.get("shop_name"),
+                    invoice_data.get("invoice_date"),
+                    invoice_data.get("total_amount", 0),
+                    invoice_data.get("transaction_type"),
+                    image_path,
+                ),
+            )
+
+            invoice_id = cursor.lastrowid
+
+            items = invoice_data.get("items", [])
+            for item in items:
+                cursor.execute(
+                    """
+                    INSERT INTO invoice_items (invoice_id, item_name, quantity, unit_price, total_price)
+                    VALUES (?, ?, ?, ?, ?)
+                """,
+                    (
+                        invoice_id,
+                        item.get("name"),
+                        item.get("quantity", 1),
+                        item.get("unit_price"),
+                        item.get("total_price", 0),
+                    ),
+                )
+
+            conn.commit()
+            conn.close()
+            return invoice_id
+        except Exception as e:
+            print(f"[ERROR] SQLite fallback error: {e}")
+            return None
     except Exception as e:
         print(f"[ERROR] Database error: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
