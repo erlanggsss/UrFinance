@@ -288,7 +288,7 @@ def activate_premium(session, telegram_user_id: str, method: str, duration_days:
         session.add(premium_data)
     
     # Update user status to Premium
-    user.status_account = AccountStatus.PREMIUM
+    user.status_account = AccountStatus.PREMIUM  # type: ignore
     session.commit()
 
 def is_token_used(session, jwt_token: str) -> bool:

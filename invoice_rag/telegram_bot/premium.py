@@ -11,7 +11,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # JWT Configuration
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "change-this-secret-key")
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+if not JWT_SECRET_KEY or JWT_SECRET_KEY == "change-this-secret-key":
+    raise ValueError("CRITICAL: JWT_SECRET_KEY is not set or is insecure. Please set a strong secret key in your environment variables.")
 JWT_ALGORITHM = "HS256"
 
 def validate_jwt_token(token: str) -> Tuple[bool, Optional[Dict[str, Any]], str]:
@@ -25,6 +27,9 @@ def validate_jwt_token(token: str) -> Tuple[bool, Optional[Dict[str, Any]], str]
         Tuple of (is_valid, decoded_payload, error_message)
     """
     try:
+        # Ensure key is a string for type checker
+        assert JWT_SECRET_KEY is not None
+
         # Decode and verify JWT
         payload = jwt.decode(
             token,
@@ -101,7 +106,7 @@ def check_premium_access(session, telegram_user_id: str) -> Dict[str, Any]:
     user = get_or_create_user(session, telegram_user_id)
     
     # Check if user is premium
-    if user.status_account != AccountStatus.PREMIUM:
+    if user.status_account != AccountStatus.PREMIUM:  # type: ignore
         return {
             'is_premium': False,
             'status': 'Free',
@@ -113,7 +118,7 @@ def check_premium_access(session, telegram_user_id: str) -> Dict[str, Any]:
     
     if not premium_data:
         # User marked as premium but no data -> downgrade
-        user.status_account = AccountStatus.FREE
+        user.status_account = AccountStatus.FREE  # type: ignore
         session.commit()
         return {
             'is_premium': False,
@@ -132,7 +137,7 @@ def check_premium_access(session, telegram_user_id: str) -> Dict[str, Any]:
     
     if now > expired_at:
         # Expired -> downgrade
-        user.status_account = AccountStatus.FREE
+        user.status_account = AccountStatus.FREE  # type: ignore
         session.commit()
         return {
             'is_premium': False,
@@ -189,7 +194,8 @@ def claim_token(session, telegram_user_id: str, jwt_token: str) -> Dict[str, Any
         }
     
     # Step 3: Parse duration from JWT
-    duration_days = parse_duration_from_jwt(payload)
+    # payload is confirmed to be a dict here because is_valid is True
+    duration_days = parse_duration_from_jwt(payload)  # type: ignore
     
     # Step 4: Activate premium
     try:
@@ -262,6 +268,7 @@ def generate_test_token(duration_days: int = 7) -> str:
         'purpose': 'premium_claim'
     }
     
+    assert JWT_SECRET_KEY is not None
     token = jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
     return token
 
