@@ -76,12 +76,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     user_record = None
     if user:
-        session = get_db_session()
-        try:
+        with get_db_session() as session:
             user_record = get_or_create_user(session, str(user.id))
             logger.info(f"User {user.id} started bot - DB ID: {user_record.id}")
-        finally:
-            session.close()
 
     keyboard = [
         ['/set_limit', '/check_limit'],
@@ -93,12 +90,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # Check if user has premium
     premium_status = ""
     if user and user_record:
-        session = get_db_session()
-        try:
+        with get_db_session() as session:
             if is_user_premium(session, str(user.id)):
                 premium_status = "✨ Premium Active ✨\n\n"
-        finally:
-            session.close()
     
     welcome_text = (
         f"👋 Hello! I'm your friendly Invoice Helper Bot!\n\n"
@@ -220,9 +214,8 @@ async def analysis_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     
     user_id = str(update.effective_user.id)
     
-    # Check premium access
-    session = get_db_session()
-    try:
+    # Check premium access using context manager
+    with get_db_session() as session:
         premium_info = check_premium_access(session, user_id)
         if not premium_info['is_premium']:
             keyboard = [[InlineKeyboardButton("🎫 Get Premium", callback_data="claim_token")]]
@@ -234,8 +227,6 @@ async def analysis_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 reply_markup=reply_markup
             )
             return
-    finally:
-        session.close()
         
     try:
         # Send text summary first
@@ -282,23 +273,23 @@ async def recent_invoices(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
         
     try:
-        session = get_db_session()
-        invoices = session.query(Invoice).order_by(Invoice.processed_at.desc()).limit(5).all()
+        with get_db_session() as session:
+            invoices = session.query(Invoice).order_by(Invoice.processed_at.desc()).limit(5).all()
         
-        if not invoices:
-            await update.message.reply_text("No invoices found in the database.")
-            return
+            if not invoices:
+                await update.message.reply_text("No invoices found in the database.")
+                return
             
-        response = "🧾 Your Recent Invoices:\n\n"
-        for inv in invoices:
-            response += (
-                f"📅 {inv.invoice_date or 'Unknown date'}\n"
-                f"🏢 {inv.shop_name}\n"
-                f"💰 Rp {inv.total_amount:,.2f}\n"
-                "───────────────\n"
-            )
+            response = "🧾 Your Recent Invoices:\n\n"
+            for inv in invoices:
+                response += (
+                    f"📅 {inv.invoice_date or 'Unknown date'}\n"
+                    f"🏢 {inv.shop_name}\n"
+                    f"💰 Rp {inv.total_amount:,.2f}\n"
+                    "───────────────\n"
+                )
         
-        await update.message.reply_text(response)
+            await update.message.reply_text(response)
         
     except Exception as e:
         await update.message.reply_text(f"❌ Error fetching recent invoices: {str(e)}")
@@ -585,9 +576,8 @@ async def export_to_excel(user_id: int, weeks_back: int = 8) -> BytesIO:
     trends = analyze_spending_trends(weeks_back=weeks_back)
     
     # Get recent invoices
-    session = get_db_session()
-    invoices = session.query(Invoice).order_by(Invoice.processed_at.desc()).limit(50).all()
-    session.close()
+    with get_db_session() as session:
+        invoices = session.query(Invoice).order_by(Invoice.processed_at.desc()).limit(50).all()
     
     # Create Excel file in memory
     output = BytesIO()
@@ -884,16 +874,13 @@ async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     user_id = str(update.effective_user.id)
     
     # Check current premium status
-    session = get_db_session()
-    try:
+    with get_db_session() as session:
         if is_user_premium(session, user_id):
             await update.message.reply_text(
                 "✨ You already have Premium access! ✨\n\n"
                 "Enjoy your advanced analytics features! 📊"
             )
             return
-    finally:
-        session.close()
     
     # Show claim token option
     keyboard = [
@@ -950,8 +937,7 @@ async def handle_token_claim(update: Update, context: ContextTypes.DEFAULT_TYPE)
     context.user_data['waiting_for_token'] = False
     
     # Attempt to claim the token
-    session = get_db_session()
-    try:
+    with get_db_session() as session:
         result = claim_token(session, user_id, token)
         
         if result['success']:
@@ -965,8 +951,6 @@ async def handle_token_claim(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 f"❌ {result['message']}\n\n"
                 "Please check your token and try again with /premium"
             )
-    finally:
-        session.close()
 
 async def main() -> None:
     """Start the bot."""

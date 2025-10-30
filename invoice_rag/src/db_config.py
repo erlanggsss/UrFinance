@@ -49,11 +49,14 @@ def get_engine():
     
     if USE_SUPABASE:
         # PostgreSQL-specific settings
+        # Increased pool size for production deployment on Railway
         return create_engine(
             db_url,
-            pool_size=5,          # Connection pool
-            max_overflow=10,      # Extra connections when needed
+            pool_size=20,         # Increased from 5 to 20
+            max_overflow=30,      # Increased from 10 to 30
             pool_pre_ping=True,   # Verify connections before use
+            pool_timeout=30,      # Wait up to 30s for connection
+            pool_recycle=3600,    # Recycle connections after 1 hour
             echo=False            # Set True for SQL debugging
         )
     else:
@@ -64,14 +67,31 @@ def get_engine():
             echo=False
         )
 
+# Create scoped session factory for thread-safe session management
+from contextlib import contextmanager
+
+@contextmanager
 def get_session():
     """
-    Get database session that works with both SQLite and PostgreSQL.
-    This replaces get_db_session() from database.py
+    Context manager for database sessions.
+    Automatically handles session cleanup and ensures connections are returned to pool.
+    
+    Usage:
+        with get_session() as session:
+            user = session.query(User).first()
+            # session automatically closed after this block
     """
     engine = get_engine()
     Session = sessionmaker(bind=engine)
-    return Session()
+    session = Session()
+    try:
+        yield session
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
 
 def get_raw_connection():
     """
