@@ -1,6 +1,6 @@
 import sqlite3
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 
 # Database path - same as used in other modules
 def get_db_path():
@@ -100,11 +100,23 @@ def analyze_invoices(weeks_back: int | None = None):
         conn.close()
 
 def parse_invoice_date(date_str):
-    """Parse various date formats from Indonesian invoices."""
+    """Parse various date formats from Indonesian invoices. Handles both strings and date objects."""
     if not date_str:
         return None
     
-    # Common date formats
+    # If it's already a datetime object (from PostgreSQL/Supabase), return it
+    if isinstance(date_str, datetime):
+        return date_str
+    
+    # If it's a date object (from PostgreSQL/Supabase), convert to datetime
+    if isinstance(date_str, date):
+        return datetime.combine(date_str, datetime.min.time())
+    
+    # If it's not a string, return None
+    if not isinstance(date_str, str):
+        return None
+    
+    # Common date formats for string parsing
     formats = [
         "%d/%m/%Y",
         "%d-%m-%Y", 

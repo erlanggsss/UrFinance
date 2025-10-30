@@ -83,3 +83,7 @@ marimorules.md
 google_credentials.json
 *.json.credentials
 *credentials*.json
+
+# Reference folders (old implementation backups)
+invoice_rag/src_reference/
+invoice_rag/telegram_bot_reference/

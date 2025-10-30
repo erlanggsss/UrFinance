@@ -392,7 +392,7 @@ async def set_limit_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     if not context.args:
         await update.message.reply_text(
             "Please provide your monthly spending limit in Rupiah.\n"
-            "Example: 5000000 (for Rp 5,000,000)"
+            "Example: /set_limit 5000000 (for Rp 5,000,000)"
         )
         return
         
