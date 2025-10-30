@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+"""
+Railway Deployment - Connection Pool Fix Applied
+Pool size increased to 20, session context managers implemented
+"""
 import os
 import sys
 import asyncio
