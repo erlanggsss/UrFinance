@@ -4,6 +4,8 @@ A powerful AI-powered invoice processing system that helps you track your spendi
 
 Perfect for personal finance tracking, expense management, and staying on top of your monthly spending!
 
+let's check it out : @UrFinanceBot
+
 ---
 
 ## 🚀 Quick Deploy
